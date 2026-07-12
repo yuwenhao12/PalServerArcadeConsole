@@ -1,0 +1,20 @@
+services:
+  palserver-gui:
+    build:
+      context: .
+      args:
+        ALPINE_MIRROR: ${ALPINE_MIRROR:-}
+    container_name: palserver-gui
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${WEBUI_PORT:-3000}:3000"
+    volumes:
+      - ./data:/app/data
+      - ${PALWORLD_SETTINGS_HOST_PATH}:/app/palworld/PalWorldSettings.ini
+      - ${PALWORLD_WORLD_SAVE_HOST_PATH}:/app/world/Level.sav:ro
+      - ${PALWORLD_PLAYER_SAVES_HOST_PATH:-./empty-players}:/app/world/Players:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

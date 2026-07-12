@@ -1,0 +1,67 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# next.js
+.next/
+out/
+
+# production / local build output
+dist/
+build/
+
+# local env files
+.env
+.env.*
+!.env.example
+.env.local
+.env.*.local
+
+# secrets / credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.csr
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+*cookie*
+*cookies*
+*credential*
+*credentials*
+*secret*
+storageState.json
+
+# local deployment configuration and runtime data
+config/
+data/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+__pycache__/
+*.py[cod]
+*.tsbuildinfo
+
+# local deployment archives
+*_deploy_*.tar.gz
+
+# local screenshots and browser profiles
+screenshots/
+edge-debug-profile/
+playwright-report/
+test-results/
+trace.zip
+
+# editor / os
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
