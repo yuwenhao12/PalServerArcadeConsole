@@ -110,10 +110,10 @@ Generate `WEBUI_SESSION_SECRET` with:
 openssl rand -hex 32
 ```
 
-If the server has trouble reaching the official Alpine mirror, set:
+If the server has trouble reaching the official Debian mirror, set:
 
 ```env
-ALPINE_MIRROR=https://mirrors.aliyun.com/alpine
+APT_MIRROR=https://mirrors.aliyun.com/debian
 ```
 
 Leave it empty to use the official mirror.

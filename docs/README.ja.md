@@ -110,10 +110,10 @@ PALWORLD_PLAYER_SAVES_HOST_PATH=/opt/1panel/apps/palworld/palworld/data/SaveGame
 openssl rand -hex 32
 ```
 
-サーバーから Alpine 公式ミラーへの接続が遅い場合は、`.env` に次を設定できます。
+サーバーから Debian 公式ミラーへの接続が遅い場合は、`.env` に次を設定できます。
 
 ```env
-ALPINE_MIRROR=https://mirrors.aliyun.com/alpine
+APT_MIRROR=https://mirrors.aliyun.com/debian
 ```
 
 空欄の場合は公式ミラーを使います。

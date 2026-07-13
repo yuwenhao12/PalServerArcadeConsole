@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        ALPINE_MIRROR: ${ALPINE_MIRROR:-}
+        APT_MIRROR: ${APT_MIRROR:-}
     container_name: palserver-gui
     restart: unless-stopped
     env_file:
