@@ -21,17 +21,23 @@ import {
   Braces,
   ChevronUp,
   CircleUserRound,
+  Crosshair,
   Cpu,
+  Filter,
   Gamepad2,
   Gauge,
+  House,
   Joystick,
   Languages,
+  Layers,
   Map,
+  MapPin,
   PartyPopper,
   Package,
   PawPrint,
   RefreshCw,
   Save,
+  Search,
   Server,
   RotateCw,
   Star,
@@ -128,6 +134,49 @@ type PalworldTranslations = {
   items: Record<string, string>;
   itemDescriptions: Record<string, string>;
   itemIcons: Record<string, string>;
+};
+
+type PalworldMapData = {
+  generatedAt: string;
+  source: { name: string; homepage: string; note: string };
+  maps: {
+    id: "palpagos" | "worldTree";
+    name: string;
+    page: string;
+    markerCount: number;
+    config: {
+      minMapTextureBlockSize: { X: number; Y: number };
+      landScapeRealPositionMin: { X: number; Y: number; Z: number };
+      landScapeRealPositionMax: { X: number; Y: number; Z: number };
+    };
+  }[];
+  categories: { id: string; count: number; types: { id: string; count: number }[] }[];
+  markers: {
+    id: string;
+    map: "palpagos" | "worldTree";
+    group: string;
+    type: string;
+    category: string;
+    label: string;
+    comment: string;
+    href: string;
+    level: number | null;
+    icon: string;
+    ipos: { x: number; y: number };
+  }[];
+};
+
+type MapPoint = {
+  id: string;
+  kind: "resource" | "player" | "base";
+  label: string;
+  detail: string;
+  x: number;
+  y: number;
+  category: string;
+  type: string;
+  level?: number | null;
+  icon?: string;
 };
 
 type FriendlySetting = {
@@ -383,6 +432,52 @@ function gameAssetUrl(path: string) {
   return `/game-data/${path}?v=${gameAssetVersion}`;
 }
 
+function clampPercent(value: number) {
+  return Math.min(100, Math.max(0, value));
+}
+
+function projectIngamePosition(ipos: { x: number; y: number }, map: PalworldMapData["maps"][number]) {
+  const perPixel = 459;
+  const min = map.config.landScapeRealPositionMin;
+  const max = map.config.landScapeRealPositionMax;
+  const transformX = (max.X - min.X) / perPixel;
+  const transformY = (max.Y - min.Y) / perPixel;
+  const ingameXStart = 1000 + (-582888 - min.X) / transformX;
+  const ingameYStart = 1000 + (-301000 - min.Y) / transformY;
+  const scaleX = (ipos.y + ingameXStart) / transformX;
+  const scaleY = (ipos.x + ingameYStart) / transformY;
+
+  if (!Number.isFinite(scaleX) || !Number.isFinite(scaleY)) return null;
+
+  return {
+    x: clampPercent((1 - scaleX) * 100),
+    y: clampPercent(scaleY * 100),
+  };
+}
+
+function projectRealPosition(position: { x: number; y: number }, map: PalworldMapData["maps"][number]) {
+  const min = map.config.landScapeRealPositionMin;
+  const max = map.config.landScapeRealPositionMax;
+  const scaleX = (position.x - min.X) / (max.X - min.X);
+  const scaleY = (position.y - min.Y) / (max.Y - min.Y);
+
+  if (!Number.isFinite(scaleX) || !Number.isFinite(scaleY) || scaleX < -0.05 || scaleX > 1.05 || scaleY < -0.05 || scaleY > 1.05) {
+    return null;
+  }
+
+  return {
+    x: clampPercent((1 - scaleX) * 100),
+    y: clampPercent(scaleY * 100),
+  };
+}
+
+function livePlayerLocation(player: Player) {
+  const x = Number(player.location_x);
+  const y = Number(player.location_y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return { x, y };
+}
+
 function WorldAsset({ src, alt, icon: Icon }: { src: string; alt: string; icon: typeof Package }) {
   const [missing, setMissing] = useState(false);
 
@@ -459,6 +554,13 @@ export default function Home() {
   const [applyStage, setApplyStage] = useState<ApplyStage>("idle");
   const [worldData, setWorldData] = useState<WorldCache | null>(null);
   const [palworldTranslations, setPalworldTranslations] = useState<PalworldTranslations | null>(null);
+  const [mapData, setMapData] = useState<PalworldMapData | null>(null);
+  const [selectedMapId, setSelectedMapId] = useState<"palpagos" | "worldTree">("palpagos");
+  const [worldPanelTab, setWorldPanelTab] = useState<"players" | "map">("players");
+  const [mapQuery, setMapQuery] = useState("");
+  const [enabledMapCategories, setEnabledMapCategories] = useState<string[]>(["Mine", "Resource", "Locations"]);
+  const [showMapPlayers, setShowMapPlayers] = useState(true);
+  const [showMapBases, setShowMapBases] = useState(true);
   const [worldLoading, setWorldLoading] = useState(false);
   const [selectedWorldPlayerId, setSelectedWorldPlayerId] = useState<string | null>(null);
   const [playerDetailTab, setPlayerDetailTab] = useState<"pals" | "inventory">("pals");
@@ -474,6 +576,12 @@ export default function Home() {
     window.localStorage.setItem("palserver-locale", locale);
     document.documentElement.lang = locale;
   }, [locale]);
+
+  useEffect(() => {
+    readJson<PalworldMapData>("/map-data/paldb-map.json")
+      .then((payload) => setMapData(payload))
+      .catch(() => setMapData(null));
+  }, []);
 
   const worldPlayers = useMemo(() => {
     if (!worldData) return [];
@@ -493,6 +601,94 @@ export default function Home() {
     if (!worldData || !selectedWorldPlayer) return null;
     return worldData.guilds.find((guild) => guild.id === selectedWorldPlayer.player.guildId) || null;
   }, [selectedWorldPlayer, worldData]);
+  const selectedMap = useMemo(() => mapData?.maps.find((map) => map.id === selectedMapId) || null, [mapData, selectedMapId]);
+  const enabledCategorySet = useMemo(() => new Set(enabledMapCategories), [enabledMapCategories]);
+  const resourceMapPoints = useMemo<MapPoint[]>(() => {
+    if (!mapData || !selectedMap) return [];
+
+    const query = mapQuery.trim().toLowerCase();
+    const points: MapPoint[] = [];
+    for (const marker of mapData.markers
+      .filter((marker) => marker.map === selectedMap.id && enabledCategorySet.has(marker.category))
+      .filter((marker) => {
+        if (!query) return true;
+        return [marker.label, marker.comment, marker.type, marker.category].some((value) => value.toLowerCase().includes(query));
+      })) {
+      const position = projectIngamePosition(marker.ipos, selectedMap);
+      if (!position) continue;
+
+      points.push({
+        id: `resource-${marker.id}`,
+        kind: "resource",
+        label: marker.label,
+        detail: [marker.type, marker.comment].filter(Boolean).join(" / "),
+        x: position.x,
+        y: position.y,
+        category: marker.category,
+        type: marker.type,
+        level: marker.level,
+        icon: marker.icon,
+      });
+      if (points.length >= 850) break;
+    }
+
+    return points;
+  }, [enabledCategorySet, mapData, mapQuery, selectedMap]);
+  const playerMapPoints = useMemo<MapPoint[]>(() => {
+    if (!selectedMap || selectedMap.id !== "palpagos" || !showMapPlayers) return [];
+
+    const points: MapPoint[] = [];
+    for (const { player, live } of worldPlayers) {
+      if (!live) continue;
+      const location = livePlayerLocation(live);
+      const position = location ? projectRealPosition(location, selectedMap) : null;
+      if (!position) continue;
+
+      points.push({
+        id: `player-${player.id}`,
+        kind: "player",
+        label: player.name,
+        detail: `${t("在线")} / ${t("等级")} ${live.level ?? player.level ?? "--"}`,
+        x: position.x,
+        y: position.y,
+        category: "Player",
+        type: "Player",
+        level: live.level ?? player.level,
+      });
+    }
+
+    return points;
+  }, [selectedMap, showMapPlayers, t, worldPlayers]);
+  const baseMapPoints = useMemo<MapPoint[]>(() => {
+    if (!worldData || !selectedMap || selectedMap.id !== "palpagos" || !showMapBases) return [];
+
+    const points: MapPoint[] = [];
+    for (const base of worldData.bases) {
+      const position = base.location ? projectRealPosition({ x: base.location.x, y: base.location.y }, selectedMap) : null;
+      if (!position) continue;
+      const guild = worldData.guilds.find((item) => item.id === base.guildId);
+
+      points.push({
+        id: `base-${base.id}`,
+        kind: "base",
+        label: base.name,
+        detail: [guild?.name, `${t("据点工作帕鲁")} ${base.workCount}`].filter(Boolean).join(" / "),
+        x: position.x,
+        y: position.y,
+        category: "Base",
+        type: "Base",
+      });
+    }
+
+    return points;
+  }, [selectedMap, showMapBases, t, worldData]);
+  const visibleMapPoints = useMemo(() => [...resourceMapPoints, ...baseMapPoints, ...playerMapPoints], [baseMapPoints, playerMapPoints, resourceMapPoints]);
+  const toggleMapCategory = useCallback((category: string) => {
+    setEnabledMapCategories((current) => current.includes(category) ? current.filter((item) => item !== category) : [...current, category]);
+  }, []);
+  const selectAllMapCategories = useCallback(() => {
+    setEnabledMapCategories(mapData?.categories.map((category) => category.id) || []);
+  }, [mapData]);
 
   useEffect(() => {
     if (!worldPlayers.length) {
@@ -1220,8 +1416,15 @@ export default function Home() {
                       <span>{new Date(worldData.updatedAt).toLocaleString(locale)}</span>
                     </div>
 
-                    <div className="world-atlas-workspace">
-                      <aside className="world-player-rail">
+                    <Tabs value={worldPanelTab} onValueChange={(value) => setWorldPanelTab(value as "players" | "map")} className="world-panel-tabs">
+                      <TabsList className="world-panel-tabs-list">
+                        <TabsTrigger value="players" className="world-detail-tab"><Users className="size-5" />{t("玩家图鉴")}</TabsTrigger>
+                        <TabsTrigger value="map" className="world-detail-tab"><Layers className="size-5" />{t("资源地图")}</TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="players" className="world-panel-content">
+                        <div className="world-atlas-workspace">
+                          <aside className="world-player-rail">
                         <div className="world-player-rail-header">
                           <div className="flex items-center gap-2 font-heading text-lg font-black text-ink">
                             <Users className="size-5" />
@@ -1338,11 +1541,109 @@ export default function Home() {
                                   </ScrollArea>
                                 )}
                               </TabsContent>
-                            </Tabs>
-                          </>
-                        )}
-                      </section>
-                    </div>
+                          </Tabs>
+                        </>
+                      )}
+                          </section>
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="map" className="world-panel-content">
+                        <div className="world-map-workspace">
+                          <aside className="world-map-filter">
+                            <div className="world-player-rail-header">
+                              <div className="flex items-center gap-2 font-heading text-lg font-black text-ink">
+                                <Filter className="size-5" />
+                                {t("地图过滤")}
+                              </div>
+                              <span className="font-heading text-sm font-black text-ink/60">{visibleMapPoints.length}</span>
+                            </div>
+                            <div className="grid gap-3 p-3">
+                              <div className="grid grid-cols-2 gap-2">
+                                {(mapData?.maps || []).map((map) => (
+                                  <button
+                                    key={map.id}
+                                    type="button"
+                                    className={`world-map-chip ${selectedMapId === map.id ? "is-selected" : ""}`}
+                                    onClick={() => setSelectedMapId(map.id)}
+                                  >
+                                    {map.id === "palpagos" ? t("帕鲁帕戈斯群岛") : t("世界树")}
+                                  </button>
+                                ))}
+                              </div>
+                              <label className="world-map-search">
+                                <Search className="size-4" />
+                                <Input value={mapQuery} onChange={(event) => setMapQuery(event.target.value)} placeholder={t("搜索点位")} className="border-0 bg-transparent p-0 font-bold shadow-none focus-visible:ring-0" />
+                              </label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button type="button" className="world-map-chip" onClick={selectAllMapCategories}>{t("全选")}</button>
+                                <button type="button" className="world-map-chip" onClick={() => setEnabledMapCategories([])}>{t("清空")}</button>
+                              </div>
+                              <div className="grid gap-2">
+                                {(mapData?.categories || []).map((category) => (
+                                  <label key={category.id} className="world-map-toggle">
+                                    <input type="checkbox" checked={enabledCategorySet.has(category.id)} onChange={() => toggleMapCategory(category.id)} />
+                                    <span>{t(category.id)}</span>
+                                    <em>{category.count}</em>
+                                  </label>
+                                ))}
+                              </div>
+                              <div className="grid gap-2 border-t-3 border-ink/15 pt-3">
+                                <label className="world-map-toggle">
+                                  <input type="checkbox" checked={showMapPlayers} onChange={(event) => setShowMapPlayers(event.target.checked)} />
+                                  <span>{t("在线玩家定位")}</span>
+                                  <em>{playerMapPoints.length}</em>
+                                </label>
+                                <label className="world-map-toggle">
+                                  <input type="checkbox" checked={showMapBases} onChange={(event) => setShowMapBases(event.target.checked)} />
+                                  <span>{t("据点定位")}</span>
+                                  <em>{baseMapPoints.length}</em>
+                                </label>
+                              </div>
+                            </div>
+                          </aside>
+
+                          <section className="world-map-stage-panel">
+                            <header className="world-map-stage-header">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 font-heading text-xl font-black text-ink">
+                                  <MapPin className="size-5" />
+                                  {selectedMapId === "palpagos" ? t("帕鲁帕戈斯群岛") : t("世界树")}
+                                </div>
+                                <p className="mt-1 truncate text-sm font-bold text-ink/60">
+                                  {t("来源")} PalDB · {t("显示点位")} {visibleMapPoints.length} / {selectedMap?.markerCount ?? 0}
+                                </p>
+                              </div>
+                              <span className="shrink-0 border-2 border-ink bg-[#ffe66d] px-3 py-1 font-heading text-xs font-black text-ink">v1.0</span>
+                            </header>
+                            <div className="world-map-stage" aria-label={t("资源地图")}>
+                              <div className="world-map-grid" />
+                              {visibleMapPoints.length === 0 ? (
+                                <div className="world-map-empty">{t("当前过滤条件没有点位。")}</div>
+                              ) : (
+                                visibleMapPoints.map((point) => (
+                                  <button
+                                    key={point.id}
+                                    type="button"
+                                    className={`world-map-marker is-${point.kind}`}
+                                    style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                                    title={`${point.label}${point.detail ? ` / ${point.detail}` : ""}`}
+                                  >
+                                    {point.kind === "player" ? <Crosshair className="size-3.5" /> : point.kind === "base" ? <House className="size-3.5" /> : point.icon ? <img src={point.icon} alt="" loading="lazy" decoding="async" /> : null}
+                                    <span>{point.label}</span>
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                            <div className="world-map-legend">
+                              <span><i className="is-resource" />{t("资源点")}</span>
+                              <span><i className="is-player" />{t("在线玩家")}</span>
+                              <span><i className="is-base" />{t("据点")}</span>
+                            </div>
+                          </section>
+                        </div>
+                      </TabsContent>
+                    </Tabs>
                   </>
                 )}
               </CardContent>

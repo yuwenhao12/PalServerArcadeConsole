@@ -15,7 +15,7 @@ This project supports Palworld 1.0. It is built for friend-group private servers
 | Game version | Supports Palworld 1.0 |
 | Deployment | Docker Compose |
 | Use case | Private friend servers and lightweight maintenance |
-| Core features | Status overview, manual save, rules panel, world atlas |
+| Core features | Status overview, manual save, rules panel, world atlas, resource map |
 | Safety boundary | The world atlas reads `Level.sav` in read-only mode and never writes back to the save file |
 
 ## Preview
@@ -46,6 +46,7 @@ These screenshots come from an actual deployment and show the dashboard, rules p
 - Server broadcast for online players.
 - Rules panel for reading, saving, and applying common `PalWorldSettings.ini` options.
 - World atlas for players, pals, bases, guilds, and world statistics after a manual save.
+- Resource map based on PalDB marker data for Palpagos and the World Tree, with category filters, search, online player pins, and base pins.
 - Inventory reading from player save files in read-only mode.
 - Local cache so the UI can read generated world data without continuously parsing save files.
 

@@ -39,6 +39,11 @@ storageState.json
 # local deployment configuration and runtime data
 config/
 data/
+*.sav
+*.sav.bak
+*.sav.tmp
+*.rcon
+*.session
 
 # logs
 npm-debug.log*
