@@ -240,6 +240,6 @@ docker compose build --no-cache palserver-gui
 docker compose up -d --force-recreate palserver-gui
 ```
 
-镜像中的存档解析依赖使用 Debian 官方的 `python3-loguru` 与 `python3-orjson`，仅 `pyooz` 从 PyPI 下载。若网络超时，可保留 `.env` 中的 `APT_MIRROR`，然后重新执行上述构建命令。
+镜像中的系统依赖通过 Debian 官方源安装，存档解析所需的 `loguru`、`orjson` 与 `pyooz` 通过 PyPI 安装。若 apt 网络超时，可保留 `.env` 中的 `APT_MIRROR`，然后重新执行上述构建命令。
 
 升级前保留 `.env` 和 `data/`。不要将 `.env`、`data/` 或 `Level.sav` 提交到代码仓库。
