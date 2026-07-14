@@ -18,7 +18,7 @@ ENV PORT=3000
 ARG APT_MIRROR=
 RUN if [ -n "$APT_MIRROR" ]; then sed -i "s|http://deb.debian.org/debian|${APT_MIRROR%/}|g; s|http://deb.debian.org/debian-security|${APT_MIRROR%/}-security|g" /etc/apt/sources.list.d/debian.sources; fi \
   && apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates docker.io python3 python3-pip \
+  && apt-get install -y --no-install-recommends ca-certificates python3 python3-pip \
   && pip3 install --no-cache-dir --retries 5 --timeout 60 --break-system-packages loguru orjson pyooz==0.0.8 \
   && rm -rf /var/lib/apt/lists/* \
   && mkdir -p /app/config /app/data
